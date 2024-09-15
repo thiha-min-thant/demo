@@ -4,7 +4,7 @@ metadata:
   creationTimestamp: null
   labels:
     infra_id: 2bcdb7c8-69e7-437a-bfe4-969639f23b0e
-    revision_id: 364bde83-046b-4e4f-b3cd-ccd2807c3858
+    revision_id: 46aba43a-b1c4-419d-a1a1-fc4abc762a21
     workflow_id: a6a34252-76c2-4a79-a2e3-2fbf75ae95cd
     workflows.argoproj.io/controller-instanceid: 2bcdb7c8-69e7-437a-bfe4-969639f23b0e
   name: custom-two
@@ -124,15 +124,15 @@ spec:
     outputs: {}
   - container:
       args:
-      - -file=/tmp/chaosengine.yaml
+      - -file=/tmp/chaosengine-run-chaos.yaml
       - -saveName=/tmp/engine-name
-      image: litmuschaos/litmus-checker:latest
+      image: docker.io/litmuschaos/litmus-checker:2.11.0
       name: ""
       resources: {}
     inputs:
       artifacts:
       - name: run-chaos
-        path: /tmp/chaosengine.yaml
+        path: /tmp/chaosengine-run-chaos.yaml
         raw:
           data: |
             apiVersion: litmuschaos.io/v1alpha1
@@ -145,14 +145,12 @@ spec:
                 workflow_name: custom-two
               annotations:
                 probeRef: '[{"name":"demo-hpttd","mode":"EOT"}]'
-                litmuschaos.io/gitops: "true"
-                litmuschaos.io/experimentId: "{{ workflow.uid }}"
               generateName: run-chaos
             spec:
               appinfo:
-                appns: kube-system
-                applabel: k8s-app=kube-proxy
-                appkind: daemonset
+                appns: default
+                applabel: app=demo
+                appkind: deployment
               jobCleanUpPolicy: retain
               engineState: active
               chaosServiceAccount: litmus-admin
