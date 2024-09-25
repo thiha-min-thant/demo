@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: pod-delete-wf
+  namespace: litmus-infra
+#  labels:
+#    subject: "{{workflow.parameters.appNamespace}}_demo-app"
+spec:
+  entrypoint: init-chaos
+  serviceAccountName: argo-chaos
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  arguments:
+    parameters:
+      - name: adminModeNamespace
+        value: litmus-infra
+      - name: appNamespace
+        value: default
+  templates:
+    - name: init-chaos
+      steps:
+        - - name: run-chaos
+            template: run-chaos
+        - - name: cleanup-chaos-resources
+            template: cleanup-chaos-resources
+    - name: run-chaos
+      inputs:
+        artifacts:
+          - name: run-chaos
+            path: /tmp/chaosengine.yaml
+            raw:
+              data: |
+                apiVersion: litmuschaos.io/v1alpha1
+                kind: ChaosEngine
+                metadata:
+                  name: kube-proxy-pod-delete-chaos
+                  namespace: "{{workflow.parameters.adminModeNamespace}}"
+                  labels:
+                    context: "{{workflow.parameters.appNamespace}}_demo-app"
+                    workflow_run_id: "{{ workflow.uid }}"
+                  annotations:
+                    probeRef: '[{"name":"demo-hpttd","mode":"EOT"}]'
+                spec:
+                  appinfo:
+                    appns: "{{workflow.parameters.appNamespace}}"
+                    applabel: "app=demo"
+                    appkind: deployment
+                  jobCleanUpPolicy: retain
+                  engineState: 'active'
+                  chaosServiceAccount: litmus-admin
+                  experiments:
+                    - name: pod-delete
+                      spec:
+                        components:
+                          env:
+                            - name: TOTAL_CHAOS_DURATION
+                              value: "60"
+                            - name: CHAOS_INTERVAL
+                              value: "10"
+                            - name: FORCE
+                              value: "false"
+      container:
+        image: litmuschaos/litmus-checker:latest
+        args:
+          - -file=/tmp/chaosengine.yaml
+          - -saveName=/tmp/engine-name
+    - name: cleanup-chaos-resources
+      container:
+        image: litmuschaos/k8s:latest
+        command:
+          - sh
+          - -c
+        args:
+          - kubectl delete chaosengine -l workflow_run_id={{workflow.uid}} -n {{workflow.parameters.adminModeNamespace}}
